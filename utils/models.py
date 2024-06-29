@@ -91,19 +91,19 @@ class QuantizationLayer(nn.Module):
 
     def forward(self, events):
         # points is a list, since events can have any size
-        B = int((1+events[-1,-1]).item())
-        num_voxels = int(2 * np.prod(self.dim) * B)
-        vox = events[0].new_full([num_voxels,], fill_value=0)
+        B = int((1+events[-1,-1]).item()) # 统计输入事件数组的最后一个元素的index
+        num_voxels = int(2 * np.prod(self.dim) * B) # 将相机一帧画面的(C, H, W) 和 一个类别文件中具有B个不同的事件相乘，然后乘上2, 所以维度[B*2,C,H,W]
+        vox = events[0].new_full([num_voxels,], fill_value=0) # 构建一个和输入事件Tensor维度一样的数组空间存储值为0，并且可以保持和输入事件数据类型一致
         C, H, W = self.dim
 
-        # get values for each channel
+        # get values for each channel 提出每个事件的数据的子数据项，
         x, y, t, p, b = events.t()
 
-        # normalizing timestamps
+        # normalizing timestamps 将事件步数进行正则化
         for bi in range(B):
             t[events[:,-1] == bi] /= t[events[:,-1] == bi].max()
 
-        p = (p+1)/2  # maps polarity to 0, 1
+        p = (p+1)/2  # maps polarity to 0, 1 将每个事件的极性映射到[0,1]之间
 
         idx_before_bins = x \
                           + W * y \

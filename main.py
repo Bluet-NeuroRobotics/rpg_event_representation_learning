@@ -61,6 +61,9 @@ def percentile(t, q):
     return result[:,None,None,None]
 
 def create_image(representation):
+    """
+    把事件流数据画出来
+    """
     B, C, H, W = representation.shape
     representation = representation.view(B, 3, C // 3, H, W).sum(2)
 
@@ -72,7 +75,7 @@ def create_image(representation):
     representation = (representation - robust_min_vals)/(robust_max_vals - robust_min_vals)
     representation = torch.clamp(255*representation, 0, 255).byte()
 
-    representation = torchvision.utils.make_grid(representation)
+    representation = torchvision.utils.make_grid(representation) # 把
 
     return representation
 
