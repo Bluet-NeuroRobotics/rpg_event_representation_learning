@@ -2,18 +2,19 @@ import numpy as np
 from os import listdir
 from os.path import join
 
-
+# 数据增广手段，随机转换事件的数据
 def random_shift_events(events, max_shift=20, resolution=(180, 240)):
     H, W = resolution
     x_shift, y_shift = np.random.randint(-max_shift, max_shift+1, size=(2,))
     events[:,0] += x_shift
     events[:,1] += y_shift
-
+    # 判断有效的时间数据，不能超过默认的H，W的范围，不能是负数
     valid_events = (events[:,0] >= 0) & (events[:,0] < W) & (events[:,1] >= 0) & (events[:,1] < H)
     events = events[valid_events]
 
     return events
 
+# 随机沿X轴翻转事件
 def random_flip_events_along_x(events, resolution=(180, 240), p=0.5):
     H, W = resolution
     if np.random.random() < p:
@@ -42,12 +43,13 @@ class NCaltech101:
         """
         returns events and label, loading events from aedat
         :param idx:
-        :return: x,y,t,p,  label
+        :return: x,y,t,p,  label 返回的是一个事件数组(x,y,t,p)和标签数组(label)
         """
-        label = self.labels[idx]
-        f = self.files[idx]
-        events = np.load(f).astype(np.float32)
+        label = self.labels[idx] # 样本标签
+        f = self.files[idx] # 文件集合
+        events = np.load(f).astype(np.float32) # 读取事件数据
 
+        # 增广数据
         if self.augmentation:
             events = random_shift_events(events)
             events = random_flip_events_along_x(events)

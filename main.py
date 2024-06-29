@@ -80,11 +80,11 @@ def create_image(representation):
 if __name__ == '__main__':
     flags = FLAGS()
 
-    # datasets, add augmentation to training set
+    # datasets, add augmentation to training set 加载训练数据集和验证数据集
     training_dataset = NCaltech101(flags.training_dataset, augmentation=True)
     validation_dataset = NCaltech101(flags.validation_dataset)
 
-    # construct loader, handles data streaming to gpu
+    # construct loader, handles data streaming to gpu 构建数据集读取器，将数据流传递给GPU
     training_loader = Loader(training_dataset, flags, device=flags.device)
     validation_loader = Loader(validation_dataset, flags, device=flags.device)
 
@@ -150,12 +150,14 @@ if __name__ == '__main__':
         sum_accuracy = 0
         sum_loss = 0
 
+        # 开始训练模型
         model = model.train()
         print(f"Training step [{i:3d}/{flags.num_epochs:3d}]")
+        # 从数据加载器中提取事件数据events和标签数据labels
         for events, labels in tqdm.tqdm(training_loader):
-            optimizer.zero_grad()
+            optimizer.zero_grad() # 梯度归0
 
-            pred_labels, representation = model(events)
+            pred_labels, representation = model(events) # 推理输入数据，返回预测标签和数据表示
             loss, accuracy = cross_entropy_loss_and_accuracy(pred_labels, labels)
 
             loss.backward()
