@@ -139,7 +139,7 @@ class Classifier(nn.Module):
 
         self.crop_dimension = crop_dimension
 
-        # replace fc layer and first convolutional layer
+        # replace fc layer and first convolutional layer 更换了两个层
         input_channels = 2*voxel_dimension[0]
         self.classifier.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.classifier.fc = nn.Linear(self.classifier.fc.in_features, num_classes)
