@@ -24,7 +24,7 @@ def random_flip_events_along_x(events, resolution=(180, 240), p=0.5):
 
 class NCaltech101:
     def __init__(self, root, augmentation=False):
-        self.classes = listdir(root)
+        self.classes = listdir(root) # 从给定的数据集路径下读取所有的文件夹的数量，默认训练集有101类
 
         self.files = []
         self.labels = []
@@ -32,9 +32,9 @@ class NCaltech101:
         self.augmentation = augmentation
 
         for i, c in enumerate(self.classes):
-            new_files = [join(root, c, f) for f in listdir(join(root, c))]
-            self.files += new_files
-            self.labels += [i] * len(new_files)
+            new_files = [join(root, c, f) for f in listdir(join(root, c))] # 遍历每个类别下的文件
+            self.files += new_files # 累计这些文件
+            self.labels += [i] * len(new_files) # 累计每个文件下的标签
 
     def __len__(self):
         return len(self.files)
