@@ -3,7 +3,7 @@ from os.path import join, dirname, isfile
 import torch
 import torch.nn.functional as F
 import numpy as np
-from torchvision.models.resnet import resnet34
+from torchvision.models.resnet import resnet34 # 导入torchvision内的resnet网络结构
 import tqdm
 
 
@@ -24,27 +24,27 @@ class ValueLayer(nn.Module):
 
         # init with trilinear kernel 启动三线性插值内核
         path = join(dirname(__file__), "quantization_layer_init", "trilinear_init.pth")
-        if isfile(path):
+        if isfile(path): #如果有这个模型路径，就加载三线性启动的模型参数
             state_dict = torch.load(path)
             self.load_state_dict(state_dict)
         else:
-            self.init_kernel(num_channels) # 启动内核
+            self.init_kernel(num_channels) # 没有训练好的模型的话，启动内核
 
     def forward(self, x):
         # create sample of batchsize 1 and input channels 1
-        x = x[None,...,None]
+        x = x[None,...,None] # 创建一个batchsize为1和输入通道为1的样本
 
-        # apply mlp convolution
+        # apply mlp convolution 将MLP的运算进行下去
         for i in range(len(self.mlp[:-1])):
             x = self.activation(self.mlp[i](x))
 
-        x = self.mlp[-1](x)
-        x = x.squeeze()
+        x = self.mlp[-1](x) #最后一层网络不用激活函数
+        x = x.squeeze() # 对维度为1的去除，维度不为1的无影响
 
         return x
 
     def init_kernel(self, num_channels):
-        ts = torch.zeros((1, 2000)) # 创建一个times存储空间
+        ts = torch.zeros((1, 2000)) # 创建一个times存储空间，为了存储两个极性的(t,x,y)
         optim = torch.optim.Adam(self.parameters(), lr=1e-2) # 定义梯度优化器
 
         torch.manual_seed(1)# 设置CPU生成随机数的种子，方便下次复现实验结果
@@ -52,7 +52,7 @@ class ValueLayer(nn.Module):
         for _ in tqdm.tqdm(range(1000)):  # converges in a reasonable time 设置一个合理的拟合时间
             optim.zero_grad() # 重置所有的梯度为0，
 
-            ts.uniform_(-1, 1) # 即在[-1, 1]的随机均匀分布里面取值并重新赋值
+            ts.uniform_(-1, 1) # 即在[-1, 1]的随机均匀分布里面取值并重新赋值, 给ts这个张量数组初始化
 
             # gt 真值
             gt_values = self.trilinear_kernel(ts, num_channels) # 返回三线性内核处理后的真值
@@ -70,6 +70,7 @@ class ValueLayer(nn.Module):
     def trilinear_kernel(self, ts, num_channels):
         gt_values = torch.zeros_like(ts) # 开辟一个真值变量和ts维度一致
 
+        #因为输入的ts是[-1,1]区间的，所以有大于0和小于0的分布，
         gt_values[ts > 0] = (1 - (num_channels-1) * ts)[ts > 0]
         gt_values[ts < 0] = ((num_channels-1) * ts + 1)[ts < 0]
 
