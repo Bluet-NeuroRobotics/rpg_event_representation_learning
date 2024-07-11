@@ -79,33 +79,36 @@ class ValueLayer(nn.Module):
 
         return gt_values
 
-# 定义量化层
+# 定义量化层,输出一个voxlize体素化的事件数据表征
 class QuantizationLayer(nn.Module):
     def __init__(self, dim,
                  mlp_layers=[1, 100, 100, 1],
                  activation=nn.LeakyReLU(negative_slope=0.1)):
         nn.Module.__init__(self)
-        self.value_layer = ValueLayer(mlp_layers,
-                                      activation=activation,
-                                      num_channels=dim[0]) # 创建一个value layer
-        self.dim = dim # 输入数据的维度
+        # 创建一个value layer
+        self.value_layer = ValueLayer(mlp_layers, # MLP层数，比如，[1, 30, 30, 1]
+                                      activation=activation, # 激活函数，比如LeakyReLU
+                                      num_channels=dim[0]) # 通道数是输入数据维度的第一维，比如是9
+        self.dim = dim # 输入数据的维度,比如(9,180,240)
 
     def forward(self, events):
         # points is a list, since events can have any size
-        B = int((1+events[-1,-1]).item()) # 统计输入事件数组的最后一个元素的index
-        num_voxels = int(2 * np.prod(self.dim) * B) # 将相机一帧画面的(C, H, W) 和 一个类别文件中具有B个不同的事件相乘，然后乘上2, 所以维度[B*2,C,H,W]
+        B = int((1+events[-1,-1]).item()) # 获取最后一个事件元素的值,强转为int类型，等于4,[3+1]
+        num_voxels = int(2 * np.prod(self.dim) * B) # 将相机一帧画面的(C, H, W) 和 一个类别文件中具有B个不同的事件属性数量相乘，然后乘上2, 所以维度[B*2,C,H,W]，等于4*2*9*180*240=3110400
         vox = events[0].new_full([num_voxels,], fill_value=0) # 构建一个和输入事件Tensor维度一样的数组空间存储值为0，并且可以保持和输入事件数据类型一致
-        C, H, W = self.dim
+        # print("vox", vox.shape) # 3110400
+        C, H, W = self.dim #(9,180,240)
 
         # get values for each channel 提出每个事件的数据的子数据项，
-        x, y, t, p, b = events.t()
+        x, y, t, p, b = events.t() 
+        # print("t shape",t.shape)每个事件集合的时间长度不一致
 
-        # normalizing timestamps 将事件步数进行正则化
+        # normalizing timestamps 将每个事件不同时间步数长度进行正则化到[0,1]
         for bi in range(B):
             t[events[:,-1] == bi] /= t[events[:,-1] == bi].max()
 
-        p = (p+1)/2  # maps polarity to 0, 1 将每个事件的极性映射到[0,1]之间
-
+        p = (p+1)/2  # maps polarity to 0, 1 将每个事件的极性从[-1,1]映射到[0,1]之间
+        # 下面的代码是计算索引
         idx_before_bins = x \
                           + W * y \
                           + 0 \
@@ -113,14 +116,16 @@ class QuantizationLayer(nn.Module):
                           + W * H * C * 2 * b
 
         for i_bin in range(C):
-            values = t * self.value_layer.forward(t-i_bin/(C-1))
+            values = t * self.value_layer.forward(t-i_bin/(C-1)) #使用MLP将值进行kernel处理
 
             # draw in voxel grid
-            idx = idx_before_bins + W * H * i_bin
-            vox.put_(idx.long(), values, accumulate=True)
+            idx = idx_before_bins + W * H * i_bin #加上C维度的bin的index
+            vox.put_(idx.long(), values, accumulate=True) # 填充上面量化完的值到体素中
 
-        vox = vox.view(-1, 2, C, H, W)
-        vox = torch.cat([vox[:, 0, ...], vox[:, 1, ...]], 1)
+        vox = vox.view(-1, 2, C, H, W) # 展开VOX体素的维度
+        # print("vox shape2", vox.shape) # [4, 2, 9, 180, 240]
+        vox = torch.cat([vox[:, 0, ...], vox[:, 1, ...]], 1) #将VOX的第二维度，维度值为2，按行拼接
+        # print("vox shape3", vox.shape) # torch.Size([4, 18, 180, 240])
 
         return vox
 
@@ -136,14 +141,14 @@ class Classifier(nn.Module):
 
         nn.Module.__init__(self)
         self.quantization_layer = QuantizationLayer(voxel_dimension, mlp_layers, activation)
-        self.classifier = resnet34(pretrained=pretrained)
+        self.classifier = resnet34(pretrained=pretrained) #定义一个Resnet34
 
         self.crop_dimension = crop_dimension
 
         # replace fc layer and first convolutional layer 更换了两个层
         input_channels = 2*voxel_dimension[0]
-        self.classifier.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.classifier.fc = nn.Linear(self.classifier.fc.in_features, num_classes)
+        self.classifier.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False) # 输入的通道数更换成对应的2*9=18
+        self.classifier.fc = nn.Linear(self.classifier.fc.in_features, num_classes) #输出的全连接层的类别数量换掉，101类
 
     def crop_and_resize_to_resolution(self, x, output_resolution=(224, 224)):
         B, C, H, W = x.shape
@@ -154,12 +159,13 @@ class Classifier(nn.Module):
             h = W // 2
             x = x[:, :, :, h - H // 2:h + H // 2]
 
-        x = F.interpolate(x, size=output_resolution)
+        x = F.interpolate(x, size=output_resolution) #插值的方式改变分辨率到(224,224)
 
         return x
 
     def forward(self, x):
         vox = self.quantization_layer.forward(x)
+        # print("x  SHAPE-->", x.shape)
         vox_cropped = self.crop_and_resize_to_resolution(vox, self.crop_dimension)
         pred = self.classifier.forward(vox_cropped)
         return pred, vox

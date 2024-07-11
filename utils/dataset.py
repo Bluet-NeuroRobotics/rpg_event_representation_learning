@@ -33,8 +33,9 @@ class NCaltech101:
 
         for i, c in enumerate(self.classes):
             new_files = [join(root, c, f) for f in listdir(join(root, c))] # 遍历每个类别下的文件
-            self.files += new_files # 累计这些文件
-            self.labels += [i] * len(new_files) # 累计每个文件下的标签
+            self.files += new_files # 累计这些文件，放在一个数组里，比如“[datasets/N-Caltech101/testing/bass/bass_1.npy, datasets/N-Caltech101/testing/bass/bass_2.npy, ...]”
+            self.labels += [i] * len(new_files) # 累计每个文件下的标签，放在一个数组里，比如，[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, ...]
+        
 
     def __len__(self):
         return len(self.files)
@@ -47,11 +48,13 @@ class NCaltech101:
         """
         label = self.labels[idx] # 样本标签
         f = self.files[idx] # 文件集合
-        events = np.load(f).astype(np.float32) # 读取事件数据
+        events = np.load(f).astype(np.float32) # 读取事件数据,每个事件数据文件的事件数量不一致，比如，(156443, 4)或者(70061, 4)
+        # print("events--->",events)
+        # print("events--->",events.shape)
 
         # 增广数据
         if self.augmentation:
-            events = random_shift_events(events)
-            events = random_flip_events_along_x(events)
+            events = random_shift_events(events) # 随机反转事件X,Y轴
+            events = random_flip_events_along_x(events) # 随机沿X轴方向变换
 
         return events, label
